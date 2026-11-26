@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="'Lab ' + ${lab.number}">Lab</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    <strong><a th:href="@{/admin}" style="color:inherit">CodeTriage</a></strong>
+    <span><a th:href="@{/admin}">All labs</a></span>
+  </div>
+</header>
+
+<div class="wrap wide">
+  <h1 th:text="${lab.displayName}"></h1>
+  <p class="lede" th:text="${lab.title}"></p>
+
+  <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+  <div class="banner bad" th:if="${error}" th:text="${error}"></div>
+
+  <div class="stats card">
+    <div class="stat"><div class="k">Submissions</div><div class="v" th:text="${activeCount}"></div></div>
+    <div class="stat"><div class="k">References</div><div class="v" th:text="${variantCount}"></div></div>
+    <div class="stat"><div class="k">Pass</div><div class="v" th:text="${passCount}"></div></div>
+    <div class="stat"><div class="k">Not pass</div><div class="v" th:text="${notPassCount}"></div></div>
+    <div class="stat">
+      <div class="k">Accepting</div>
+      <div class="v" th:text="${lab.acceptingSubmissions} ? 'Yes' : 'No'"></div>
+    </div>
+  </div>
+
+  <h2>1 · Assignment sheet</h2>
+  <div class="card">
+    <div th:if="${lab.assignmentFilename != null}">
+      <table>
+        <tr><th>File</th>
+          <td>
+            <a th:href="@{/admin/labs/{n}/{g}/assignment(n=${lab.number},g=${lab.studentGroup.name()})}"
+               th:text="${lab.assignmentFilename}"></a>
+          </td></tr>
+        <tr><th>Text extracted</th>
+          <td th:text="${#strings.length(lab.assignmentText)} + ' characters'"></td></tr>
+      </table>
+
+      <h3>What the model will read</h3>
+      <pre class="code" style="max-height:260px"
+           th:text="${#strings.abbreviate(lab.assignmentText, 2000)}"></pre>
+      <div class="hint">
+        Read this before generating anything. If it looks mangled or empty, the
+        PDF was probably a scan — the text is an image, so paste the task into
+        the box below instead.
+      </div>
+
+      <form th:action="@{/admin/labs/{n}/{g}/assignment/clear(n=${lab.number},g=${lab.studentGroup.name()})}" method="post"
+            style="margin-top:14px">
+        <button type="submit" class="danger">Remove assignment</button>
+      </form>
+    </div>
+
+    <form th:unless="${lab.assignmentFilename != null}"
+          th:action="@{/admin/labs/{n}/{g}/assignment(n=${lab.number},g=${lab.studentGroup.name()})}" method="post"
+          enctype="multipart/form-data">
+      <label for="assignment">Upload the assignment you gave the students</label>
+      <input type="file" id="assignment" name="assignment"
+             accept=".pdf,.docx,.txt,.md" required>
+      <div class="hint">
+        Accepted: <span th:text="${acceptedAssignmentTypes}"></span>.
+        Reference generation and rubric grading both read this, so upload the
+        sheet the students actually received.
+      </div>
+      <div class="actions"><button type="submit">Upload</button></div>
+    </form>
+  </div>
+
+  <h2>2 · Task text and starter code</h2>
+  <form class="card" th:action="@{/admin/labs/{n}/{g}(n=${lab.number},g=${lab.studentGroup.name()})}" method="post">
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" th:value="${lab.title}">
+
+    <label for="specification">Task text</label>
+    <textarea id="specification" name="specification" rows="10"
+              th:text="${lab.specification}"
+              placeholder="Only needed if you have not uploaded an assignment file, or if the extracted text came out wrong."></textarea>
+    <div class="hint">
+      The uploaded assignment takes precedence. This box is the fallback when
+      there is no upload, and the override when extraction fails.
+    </div>
+
+    <label for="starterCode">Starter code you handed out (optional)</label>
+    <textarea id="starterCode" name="starterCode" rows="7"
+              th:text="${lab.starterCode}"
+              placeholder="Boilerplate, method signatures, provided classes..."></textarea>
+    <div class="hint">
+      Excluded from similarity. Skip this and shared boilerplate inflates every
+      score and buries the signal.
+    </div>
+
+    <label for="deadline">Deadline (Europe/Tirane, optional)</label>
+    <input type="datetime-local" id="deadline" name="deadline" th:value="${deadlineLocal}">
+    <div class="hint">Late submissions are accepted and marked, never rejected.</div>
+
+    <label style="display:flex;align-items:center;gap:9px;font-weight:600;margin-top:18px">
+      <input type="checkbox" name="open" value="true" th:checked="${lab.open}" style="width:auto">
+      Open for submissions
+    </label>
+
+    <div class="actions"><button type="submit">Save</button></div>
+  </form>
+
+  <div class="card" th:if="${lab.hasTaskText()}">
+    <h3 style="margin-top:0">Copy this task to the other groups</h3>
+    <p style="margin-top:0;font-size:14px;color:#6b6b6b">
+      Copies the title, task text and starter code only. Deadlines, open state and
+      reference corpora stay per group — you almost never want those shared.
+    </p>
+    <form th:action="@{/admin/labs/{n}/{g}/copy-to-groups(n=${lab.number},g=${lab.studentGroup.name()})}"
+          method="post">
+      <div th:each="g : ${allGroups}"
+           th:unless="${g == lab.studentGroup}">
+        <label style="display:flex;align-items:center;gap:9px;font-weight:500;margin-top:8px">
+          <input type="checkbox" name="targets" th:value="${g.name()}" style="width:auto">
+          <span th:text="${g.label}"></span>
+        </label>
+      </div>
+      <div class="actions"><button type="submit" class="secondary">Copy task text</button></div>
+    </form>
+  </div>
+
+  <h2>3 · Grading</h2>
+  <div class="card">
+    <p style="margin-top:0">
+      Compiles each submission and, if an assignment is available, assesses it
+      against the stated requirements. Both are inputs for you — neither sets a
+      verdict. Pass / not pass is always your click.
+    </p>
+    <div class="notice" style="margin:0 0 16px">
+      <strong>Similarity does not affect grades</strong>
+      Triage flags and grades are separate records and stay that way. A flag means
+      "look at this", never "mark it down".
+    </div>
+
+    <div th:if="${gradingJob != null}">
+      <div class="progress"><div th:style="'width:' + ${gradingJob.percent} + '%'"></div></div>
+      <div class="hint" th:text="${gradingJob.message} + ' (' + ${gradingJob.done} + '/' + ${gradingJob.total} + ')'"></div>
+      <div class="banner bad" style="margin-top:10px" th:if="${gradingJob.error != null}"
+           th:text="${gradingJob.error}"></div>
+    </div>
+
+    <form th:action="@{/admin/labs/{n}/{g}/grade(n=${lab.number},g=${lab.studentGroup.name()})}" method="post">
+      <label style="display:flex;align-items:center;gap:9px;font-weight:600">
+        <input type="checkbox" name="assess" value="true" checked style="width:auto"
+               th:disabled="${!llmConfigured or !lab.hasTaskText()}">
+        Also run the rubric assessment
+      </label>
+      <div class="hint" th:if="${!llmConfigured}">No API key, so compile check only.</div>
+      <div class="hint" th:if="${llmConfigured and !lab.hasTaskText()}">
+        No assignment text yet, so compile check only.
+      </div>
+      <div class="actions">
+        <button type="submit">Run checks</button>
+        <a class="btn secondary" th:href="@{/admin/labs/{n}/{g}/grades(n=${lab.number},g=${lab.studentGroup.name()})}">
+          Open grading sheet →
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <h2>4 · Similarity</h2>
+  <div class="card">
+    <p style="margin-top:0">
+      Generates reference solutions for this task across eight prompting styles at
+      three temperatures, then compares every submission against them and against
+      each other.
+    </p>
+
+    <div th:if="${corpusJob != null}">
+      <div class="progress"><div th:style="'width:' + ${corpusJob.percent} + '%'"></div></div>
+      <div class="hint" th:text="${corpusJob.message} + ' (' + ${corpusJob.done} + '/' + ${corpusJob.total} + ')'"></div>
+      <div class="banner bad" style="margin-top:10px" th:if="${corpusJob.error != null}"
+           th:text="${corpusJob.error}"></div>
+    </div>
+
+    <form th:action="@{/admin/labs/{n}/{g}/corpus(n=${lab.number},g=${lab.studentGroup.name()})}" method="post">
+      <label for="repeats">Runs per prompting style</label>
+      <input type="number" id="repeats" name="repeats" value="3" min="1" max="6" style="width:90px">
+      <div class="hint">8 styles × this number = total references. 3 gives 24.</div>
+      <div class="actions">
+        <button type="submit" th:disabled="${!llmConfigured or !lab.hasTaskText()}">
+          Generate references
+        </button>
+      </div>
+    </form>
+
+    <form th:action="@{/admin/labs/{n}/{g}/corpus/clear(n=${lab.number},g=${lab.studentGroup.name()})}" method="post"
+          style="margin-top:10px">
+      <button type="submit" class="danger" th:if="${variantCount > 0}">Clear corpus</button>
+    </form>
+
+    <hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+
+    <div th:if="${triageJob != null}">
+      <div class="progress"><div th:style="'width:' + ${triageJob.percent} + '%'"></div></div>
+      <div class="hint" th:text="${triageJob.message}"></div>
+      <div class="banner bad" style="margin-top:10px" th:if="${triageJob.error != null}"
+           th:text="${triageJob.error}"></div>
+    </div>
+
+    <form th:action="@{/admin/labs/{n}/{g}/triage(n=${lab.number},g=${lab.studentGroup.name()})}" method="post">
+      <div class="actions"><button type="submit">Run triage</button></div>
+    </form>
+
+    <h3 th:if="${!#lists.isEmpty(runs)}">Previous runs</h3>
+    <table th:if="${!#lists.isEmpty(runs)}">
+      <tbody>
+      <tr th:each="r : ${runs}">
+        <td><a th:href="@{/admin/runs/{id}(id=${r.id})}"
+               th:text="${#temporals.format(r.startedAt, 'dd/MM/yyyy HH:mm')}"></a></td>
+        <td><span class="pill" th:classappend="${r.status.name() == 'FAILED'} ? 'flag' : ''"
+                  th:text="${r.status}"></span></td>
+        <td class="num" th:text="${r.submissionCount} + ' subs'"></td>
+        <td class="num" th:text="${r.referenceCount} + ' refs'"></td>
+        <td style="color:#8d2f2f;font-size:13px" th:text="${r.errorMessage}"></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Submissions</h2>
+  <div class="card">
+    <p style="margin-top:0;color:#6b6b6b" th:if="${#lists.isEmpty(submissions)}">
+      Nothing submitted yet.
+    </p>
+    <table th:unless="${#lists.isEmpty(submissions)}">
+      <thead>
+      <tr><th>Student</th><th>Group</th><th>Submitted</th><th>Files</th><th></th><th></th></tr>
+      </thead>
+      <tbody>
+      <tr th:each="s : ${submissions}" th:style="${s.superseded} ? 'opacity:0.45' : ''">
+        <td th:text="${s.studentName}"></td>
+        <td th:text="${s.studentGroup.label}"></td>
+        <td class="num" th:text="${#temporals.format(s.submittedAt, 'dd/MM HH:mm')}"></td>
+        <td class="num" th:text="${s.sourceFileCount}"></td>
+        <td>
+          <span class="pill warn" th:if="${s.late}">late</span>
+          <span class="pill off" th:if="${s.superseded}">superseded</span>
+        </td>
+        <td><a th:href="@{/admin/submissions/{id}/archive(id=${s.id})}">zip</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

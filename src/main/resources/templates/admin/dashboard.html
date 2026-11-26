@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Labs</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    <strong>CodeTriage</strong>
+    <span>
+      <a th:href="@{/}">Student portal</a>
+      &nbsp;·&nbsp;
+      <form th:action="@{/logout}" method="post" style="display:inline">
+        <button class="secondary" style="padding:4px 10px;font-size:13px">Sign out</button>
+      </form>
+    </span>
+  </div>
+</header>
+
+<div class="wrap wide">
+  <h1>Labs</h1>
+  <p class="lede">
+    Each group has its own five labs. Lab 3 for INF - 2A and Lab 3 for
+    KOMPJUTERIKE are separate: own assignment, deadline, reference corpus and
+    grading.
+  </p>
+
+  <div class="banner bad" th:unless="${llmConfigured}">
+    <strong>ANTHROPIC_API_KEY is not set.</strong>
+    Submissions, compile checks and student-to-student comparison still work.
+    Reference generation and rubric grading do not.
+  </div>
+
+  <div th:each="entry : ${byGroup}">
+    <h2 th:text="${entry.key.label}"></h2>
+    <div class="card">
+      <table>
+        <thead>
+        <tr>
+          <th>Lab</th><th>Status</th><th>Assignment</th><th>Subs</th>
+          <th>Refs</th><th>Pass</th><th>Not pass</th><th>Last run</th><th></th><th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="s : ${entry.value}">
+          <td>
+            <strong th:text="${s.lab.number}"></strong>
+            &nbsp;<span style="color:#6b6b6b" th:text="${s.lab.title}"></span>
+          </td>
+          <td>
+            <span class="pill" th:if="${s.lab.acceptingSubmissions}">Open</span>
+            <span class="pill off" th:unless="${s.lab.acceptingSubmissions}">Closed</span>
+          </td>
+          <td>
+            <span class="pill" th:if="${s.lab.assignmentFilename != null}">uploaded</span>
+            <span class="pill off"
+                  th:if="${s.lab.assignmentFilename == null and s.lab.hasTaskText()}">pasted</span>
+            <span class="pill off"
+                  th:if="${s.lab.assignmentFilename == null and !s.lab.hasTaskText()}">none</span>
+          </td>
+          <td class="num" th:text="${s.submissionCount}"></td>
+          <td class="num" th:text="${s.variantCount}"></td>
+          <td class="num" th:text="${s.passCount}"></td>
+          <td class="num" th:text="${s.notPassCount}"></td>
+          <td>
+            <span th:if="${s.lastRun == null}" style="color:#6b6b6b">—</span>
+            <a th:if="${s.lastRun != null}" th:href="@{/admin/runs/{id}(id=${s.lastRun.id})}"
+               th:text="${s.lastRun.status} + ' · ' + ${#temporals.format(s.lastRun.startedAt, 'dd/MM HH:mm')}"></a>
+          </td>
+          <td>
+            <a th:href="@{/admin/labs/{n}/{g}/grades(n=${s.lab.number},g=${s.lab.studentGroup.name()})}">Grading</a>
+          </td>
+          <td>
+            <a th:href="@{/admin/labs/{n}/{g}(n=${s.lab.number},g=${s.lab.studentGroup.name()})}">Open →</a>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="note">
+    This tool produces a review queue, not a verdict. Similarity is a reason to
+    look at code and talk to a student, never on its own a finding of misconduct.
+  </footer>
+</div>
+</body>
+</html>

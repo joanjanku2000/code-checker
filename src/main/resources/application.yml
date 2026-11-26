@@ -1,0 +1,61 @@
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: native
+
+spring:
+  application:
+    name: codetriage
+  datasource:
+    url: jdbc:h2:file:${CODETRIAGE_DATA_DIR:./data}/db/codetriage;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ${H2_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  thymeleaf:
+    cache: ${THYMELEAF_CACHE:true}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 24MB
+
+codetriage:
+  # Root folder for uploaded zips, extracted sources and JPlag workspaces.
+  data-dir: ${CODETRIAGE_DATA_DIR:./data}
+
+  admin:
+    username: ${ADMIN_USERNAME:lecturer}
+    # bcrypt hash. Generate with: mvn -q exec:java (see README) or any bcrypt tool.
+    password-hash: ${ADMIN_PASSWORD_HASH:}
+
+  intake:
+    # Hard caps applied to every uploaded archive before anything is written to disk.
+    max-entries: 400
+    max-uncompressed-bytes: 41943040      # 40 MB
+    max-compression-ratio: 120
+    allowed-extensions: .java,.txt,.md,.properties,.sql,.xml,.json,.yml,.yaml,.gitignore
+    max-source-files: 120
+
+  llm:
+    base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${ANTHROPIC_MODEL:claude-sonnet-5-5}
+    max-tokens: 8000
+    timeout-seconds: 180
+    # Current models reject `temperature` with a 400. Leave false unless you
+    # switch to a model that still accepts it.
+    send-temperature: ${ANTHROPIC_SEND_TEMPERATURE:false}
+
+  similarity:
+    # JPlag: minimum matching token sequence. Lower = more sensitive, noisier.
+    minimum-token-match: 9
+    # Modified z-score above which a submission enters the review queue.
+    outlier-z-threshold: 3.5
+    # Absolute floor, so a uniformly-copied cohort still surfaces.
+    absolute-review-threshold: 0.80
+
+logging:
+  level:
+    de.jplag: WARN

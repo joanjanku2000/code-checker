@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compare</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    <strong><a th:href="@{/admin}" style="color:inherit">CodeTriage</a></strong>
+    <span><a th:href="@{/admin/runs/{id}(id=${finding.run.id})}">← Back to the run</a></span>
+  </div>
+</header>
+
+<div class="wrap wide">
+  <h1 th:text="${submission.studentName}"></h1>
+  <p class="lede">
+    <span th:text="${submission.studentGroup.label}"></span> ·
+    Lab <span th:text="${submission.labNumber}"></span> ·
+    submitted <span th:text="${#temporals.format(submission.submittedAt, 'dd/MM/yyyy HH:mm')}"></span>
+  </p>
+
+  <div class="stats card">
+    <div class="stat">
+      <div class="k">vs reference</div>
+      <div class="v" th:text="${finding.topReferencePercent} + '%'"></div>
+    </div>
+    <div class="stat">
+      <div class="k">vs peers</div>
+      <div class="v" th:text="${finding.topPeerPercent} + '%'"></div>
+    </div>
+    <div class="stat">
+      <div class="k">z-score</div>
+      <div class="v" th:text="${finding.referenceZScore == null} ? '—'
+            : ${#numbers.formatDecimal(finding.referenceZScore, 1, 1)}"></div>
+    </div>
+    <div class="stat">
+      <div class="k">Run baseline</div>
+      <div class="v" th:text="${finding.run.referenceBaseline == null} ? '—'
+            : ${#numbers.formatDecimal(finding.run.referenceBaseline * 100, 1, 0)} + '%'"></div>
+    </div>
+  </div>
+
+  <div class="banner bad" th:if="${finding.needsReview}">
+    <strong>Flagged because:</strong> <span th:text="${finding.reviewReasons}"></span>
+  </div>
+
+  <div class="actions" style="margin-bottom:8px">
+    <a class="btn secondary" th:href="@{/admin/submissions/{id}/archive(id=${submission.id})}">
+      Download the student's zip
+    </a>
+    <a class="btn secondary"
+       th:href="@{/admin/labs/{n}/{g}/grades(n=${submission.lab.number},g=${submission.lab.studentGroup.name()})}">Grading sheet</a>
+  </div>
+
+  <h2>Grade</h2>
+  <div class="card">
+    <div class="notice" style="margin:0 0 16px">
+      <strong>Separate from the similarity figures above</strong>
+      The numbers on this page tell you where to look. They are not an input to
+      the verdict, and nothing here is shown to the student.
+    </div>
+
+    <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <span th:if="${grade == null or grade.compileOk == null}" class="pill off">not checked</span>
+      <span th:if="${grade != null and grade.compileOk == true}" class="pill">compiles</span>
+      <span th:if="${grade != null and grade.compileOk == false}" class="pill flag"
+            th:text="'does not compile (' + ${grade.compileErrorCount} + ')'"></span>
+      <span th:if="${grade != null and grade.suggestedVerdict != null}" class="pill warn"
+            th:text="'suggested: ' + ${grade.suggestedVerdict.label}"></span>
+      <span th:if="${grade != null and grade.verdict.name() == 'PASS'}" class="pill"
+            style="font-size:13px;padding:4px 12px">PASS</span>
+      <span th:if="${grade != null and grade.verdict.name() == 'NOT_PASS'}" class="pill flag"
+            style="font-size:13px;padding:4px 12px">NOT PASS</span>
+      <span th:if="${grade == null or grade.verdict.name() == 'UNGRADED'}" class="pill off"
+            style="font-size:13px;padding:4px 12px">undecided</span>
+    </div>
+
+    <div th:if="${grade != null and !#lists.isEmpty(grade.criteria)}">
+      <h3 style="margin-top:0">Against the assignment</h3>
+      <table>
+        <tbody>
+        <tr th:each="c : ${grade.criteria}">
+          <td style="width:28px">
+            <span th:if="${c.met}" style="color:var(--accent);font-weight:700">&#10003;</span>
+            <span th:unless="${c.met}" style="color:var(--flag);font-weight:700">&#10007;</span>
+          </td>
+          <td><strong th:text="${c.requirement}"></strong>
+            <div class="hint" style="margin-top:2px" th:text="${c.note}"></div>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+      <p style="font-size:14px" th:if="${grade.suggestionReasoning != null}">
+        <em th:text="${grade.suggestionReasoning}"></em>
+      </p>
+    </div>
+
+    <div th:if="${grade != null and grade.compileOk == false}">
+      <h3>Compiler output</h3>
+      <pre class="code" style="max-height:220px" th:text="${grade.compileOutput}"></pre>
+    </div>
+
+    <form th:action="@{/admin/grades/{id}/decide(id=${submission.id})}" method="post"
+          style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:18px">
+      <input type="hidden" name="back"
+             th:value="'/admin/findings/' + ${finding.id}">
+      <div style="flex:1;min-width:240px">
+        <label for="note" style="margin-top:0">Note (optional)</label>
+        <input type="text" id="note" name="note"
+               th:value="${grade != null} ? ${grade.lecturerNote} : ''"
+               placeholder="Why, in a line">
+      </div>
+      <button type="submit" name="verdict" value="PASS">Pass</button>
+      <button type="submit" name="verdict" value="NOT_PASS" class="danger">Not pass</button>
+      <button type="submit" name="verdict" value="UNGRADED" class="secondary">Clear</button>
+    </form>
+  </div>
+
+  <h2>Student's code vs the closest reference</h2>
+
+  <div class="card" th:if="${variant != null}">
+    <h3 style="margin-top:0">How that reference was produced</h3>
+    <table>
+      <tr><th>Prompting style</th><td th:text="${variant.profileKey}"></td></tr>
+      <tr><th>Model</th><td th:text="${variant.model}"></td></tr>
+      <tr><th>Temperature</th><td th:text="${variant.temperature}"></td></tr>
+      <tr><th>Generated</th>
+        <td th:text="${#temporals.format(variant.generatedAt, 'dd/MM/yyyy HH:mm')}"></td></tr>
+      <tr><th>Prompt</th>
+        <td><pre class="code" style="max-height:200px" th:text="${variant.userPrompt}"></pre></td></tr>
+    </table>
+    <div class="hint">
+      This is the part worth showing a student: a concrete artefact, how it was
+      made, and their code beside it.
+    </div>
+  </div>
+
+  <div class="side-by-side">
+    <div>
+      <h3 th:text="${submission.studentName} + ' — submitted'"></h3>
+      <pre class="code" th:text="${studentCode}"></pre>
+    </div>
+    <div>
+      <h3 th:text="${variant != null} ? 'Reference: ' + ${variant.profileKey} : 'No reference matched'"></h3>
+      <pre class="code" th:if="${variant != null}" th:text="${variant.code}"></pre>
+      <p style="color:#6b6b6b" th:if="${variant == null}">
+        No reference corpus was available for this run, so only student-to-student
+        comparison applies.
+      </p>
+    </div>
+  </div>
+
+  <div th:if="${peer != null}">
+    <h2>Closest other student</h2>
+    <div class="side-by-side">
+      <div>
+        <h3 th:text="${submission.studentName}"></h3>
+        <pre class="code" th:text="${studentCode}"></pre>
+      </div>
+      <div>
+        <h3 th:text="${peer.studentName} + ' (' + ${peer.studentGroup.label} + ')'"></h3>
+        <pre class="code" th:text="${peerCode}"></pre>
+      </div>
+    </div>
+  </div>
+
+  <footer class="note">
+    Similarity narrows where to look. It does not establish what happened — asking
+    the student to explain a specific line does.
+  </footer>
+</div>
+</body>
+</html>

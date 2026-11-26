@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="sq" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dorëzimi i detyrës së laboratorit</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+
+<header class="site">
+  <div class="inner">
+    <strong>Dorëzimi i detyrave të laboratorit</strong>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h1>Dorëzo zgjidhjen</h1>
+  <p class="lede">Plotëso të dhënat dhe ngarko zgjidhjen tënde si skedar <code>.zip</code>.</p>
+
+  <!-- The deterrence notice. Students read this before they upload, which is the
+       point: saying plainly that comparison happens deters more reliably than any
+       detector catches. -->
+  <div class="notice">
+    <strong>Vini re</strong>
+    Të gjitha zgjidhjet krahasohen automatikisht me njëra-tjetrën. Zgjidhjet
+    identike ose shumë të ngjashme midis studentëve identifikohen dhe shqyrtohen
+    nga pedagogu. Puna duhet të jetë e juaja.
+  </div>
+
+  <div class="banner bad" th:if="${error}" th:text="${error}"></div>
+
+  <div class="card" th:if="${#lists.isEmpty(openLabs)}">
+    <p style="margin:0">Për momentin nuk ka laborator të hapur për dorëzime.</p>
+  </div>
+
+  <form class="card" th:unless="${#lists.isEmpty(openLabs)}"
+        th:action="@{/submit}" th:object="${form}" method="post"
+        enctype="multipart/form-data">
+
+    <label for="studentName">Emri dhe mbiemri</label>
+    <input type="text" id="studentName" th:field="*{studentName}"
+           autocomplete="name" placeholder="Emri Mbiemri" required>
+    <div class="hint" style="color:#8d2f2f" th:if="${#fields.hasErrors('studentName')}"
+         th:errors="*{studentName}"></div>
+    <div class="hint">Shkruaje njësoj sa herë dorëzon, që dorëzimet e tua të njihen.</div>
+
+    <label for="studentGroup">Grupi</label>
+    <select id="studentGroup" th:field="*{studentGroup}" required>
+      <option value="">— zgjidh —</option>
+      <option th:each="g : ${groups}" th:value="${g}" th:text="${g.label}"></option>
+    </select>
+    <div class="hint" style="color:#8d2f2f" th:if="${#fields.hasErrors('studentGroup')}"
+         th:errors="*{studentGroup}"></div>
+
+    <label for="labNumber">Laboratori</label>
+    <select id="labNumber" th:field="*{labNumber}" required>
+      <option value="">— zgjidh fillimisht grupin —</option>
+      <option th:each="l : ${openLabs}" th:value="${l.number}"
+              th:attr="data-group=${l.studentGroup.name()}"
+              th:text="'Laboratori ' + ${l.number} + ' — ' + ${l.title}"></option>
+    </select>
+    <div class="hint" style="color:#8d2f2f" th:if="${#fields.hasErrors('labNumber')}"
+         th:errors="*{labNumber}"></div>
+    <div class="hint" id="noLabs" style="display:none;color:#8a4b1f">
+      Nuk ka laborator të hapur për këtë grup.
+    </div>
+
+    <label for="solution">Skedari .zip i zgjidhjes</label>
+    <input type="file" id="solution" name="solution" accept=".zip,application/zip" required>
+    <div class="hint">
+      Vetëm <code>.zip</code>, maksimumi 20 MB. Brenda duhet të ketë skedarët
+      <code>.java</code>. Skedarët e përpiluar dhe dosjet <code>target/</code> ose
+      <code>build/</code> nuk nevojiten.
+    </div>
+
+    <div class="actions">
+      <button type="submit">Dorëzo</button>
+    </div>
+  </form>
+
+  <footer class="note">
+    Nëse dorëzon më shumë se një herë për të njëjtin laborator, merret parasysh
+    dorëzimi i fundit.
+  </footer>
+</div>
+
+<script>
+  // Each group has its own labs, so the lab list depends on the group chosen.
+  // Options are rebuilt rather than hidden: a hidden <option> is still
+  // selectable in some browsers. The server re-checks the pair on submit, so
+  // this is convenience and not a control.
+  (function () {
+    var groupSelect = document.getElementById('studentGroup');
+    var labSelect = document.getElementById('labNumber');
+    var warning = document.getElementById('noLabs');
+    if (!groupSelect || !labSelect) return;
+
+    var all = Array.prototype.slice.call(labSelect.querySelectorAll('option[data-group]'))
+      .map(function (o) {
+        return { value: o.value, text: o.textContent, group: o.getAttribute('data-group') };
+      });
+    var preselected = labSelect.value;
+
+    function rebuild() {
+      var group = groupSelect.value;
+      var matching = all.filter(function (o) { return o.group === group; });
+
+      labSelect.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = group
+        ? (matching.length ? '— zgjidh —' : '— asnjë laborator i hapur —')
+        : '— zgjidh fillimisht grupin —';
+      labSelect.appendChild(placeholder);
+
+      matching.forEach(function (o) {
+        var el = document.createElement('option');
+        el.value = o.value;
+        el.textContent = o.text;
+        if (o.value === preselected) el.selected = true;
+        labSelect.appendChild(el);
+      });
+
+      warning.style.display = (group && matching.length === 0) ? 'block' : 'none';
+    }
+
+    groupSelect.addEventListener('change', function () { preselected = ''; rebuild(); });
+    rebuild();
+  })();
+</script>
+</body>
+</html>

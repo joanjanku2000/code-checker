@@ -1,0 +1,22 @@
+services:
+  codetriage:
+    build: .
+    container_name: codetriage
+    restart: unless-stopped
+    env_file: .env
+    # Defaults to localhost. Set BIND_ADDR=0.0.0.0 in .env to expose it directly,
+    # which serves everything over plain HTTP — see the warning in deploy.sh.
+    # The safe production shape is BIND_ADDR=127.0.0.1 with nginx terminating TLS.
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-8080}:8080"
+    volumes:
+      - codetriage-data:/var/lib/codetriage
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8080/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  codetriage-data:

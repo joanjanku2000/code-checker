@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="'Triage run ' + ${run.id}">Run</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    <strong><a th:href="@{/admin}" style="color:inherit">CodeTriage</a></strong>
+    <span>
+      <a th:href="@{/admin/labs/{n}/{g}(n=${run.lab.number},g=${run.lab.studentGroup.name()})}"
+         th:text="${run.lab.displayName}"></a>
+      &nbsp;·&nbsp;<a th:href="@{/admin}">All labs</a>
+    </span>
+  </div>
+</header>
+
+<div class="wrap wide">
+  <h1 th:text="${run.lab.displayName} + ' — review queue'"></h1>
+  <p class="lede" th:text="${#temporals.format(run.startedAt, 'dd MMMM yyyy, HH:mm')}"></p>
+
+  <div class="banner bad" th:if="${run.status.name() == 'FAILED'}">
+    <strong>This run failed.</strong>
+    <span th:text="${run.errorMessage}"></span>
+  </div>
+
+  <div class="stats card">
+    <div class="stat"><div class="k">Submissions</div><div class="v" th:text="${run.submissionCount}"></div></div>
+    <div class="stat"><div class="k">References</div><div class="v" th:text="${run.referenceCount}"></div></div>
+    <div class="stat">
+      <div class="k">Convergence floor</div>
+      <div class="v" th:text="${run.referenceBaseline == null} ? '—'
+            : ${#numbers.formatDecimal(run.referenceBaseline * 100, 1, 0)} + '%'"></div>
+    </div>
+    <div class="stat">
+      <div class="k">Cohort median</div>
+      <div class="v" th:text="${run.studentMedian == null} ? '—'
+            : ${#numbers.formatDecimal(run.studentMedian * 100, 1, 0)} + '%'"></div>
+    </div>
+    <div class="stat"><div class="k">Flagged</div><div class="v" th:text="${#lists.size(flagged)}"></div></div>
+  </div>
+
+  <!-- The framing matters as much as the numbers. Anyone opening this page should
+       read what the figures can and cannot support before acting on them. -->
+  <div class="notice">
+    <strong>How to read this</strong>
+    The convergence floor is how similar two independent model answers to this task
+    are <em>anyway</em>. A student at or below it has told you nothing. Flags mean
+    "worth opening", never "copied". Before acting, open the code and ask the
+    student to explain a specific decision in it — that conversation is the
+    evidence, this table is only how you decide whom to have it with.
+  </div>
+
+  <div class="actions" style="margin-bottom:24px">
+    <a class="btn secondary" th:href="@{/admin/runs/{id}/export.csv(id=${run.id})}">Download CSV</a>
+    <a class="btn secondary" th:if="${hasReport}"
+       th:href="@{/admin/runs/{id}/report.zip(id=${run.id})}">JPlag report (.zip)</a>
+    <span class="hint" th:if="${hasReport}" style="margin:0">
+      Open in the JPlag report viewer for highlighted side-by-side matches.
+    </span>
+  </div>
+
+  <h2 th:text="'Needs a look (' + ${#lists.size(flagged)} + ')'"></h2>
+  <div class="card">
+    <p style="margin-top:0;color:#6b6b6b" th:if="${#lists.isEmpty(flagged)}">
+      Nothing stood out in this cohort.
+    </p>
+    <table th:unless="${#lists.isEmpty(flagged)}">
+      <thead>
+      <tr>
+        <th>Student</th><th>Group</th><th>vs reference</th>
+        <th>vs peers</th><th>z</th><th>Why</th><th></th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="f : ${flagged}" class="flag">
+        <td th:text="${f.submission.studentName}"></td>
+        <td th:text="${f.submission.studentGroup.label}"></td>
+        <td class="num" th:text="${f.topReferencePercent} + '%'"></td>
+        <td class="num" th:text="${f.topPeerPercent} + '%'"></td>
+        <td class="num" th:text="${f.referenceZScore == null} ? '—'
+              : ${#numbers.formatDecimal(f.referenceZScore, 1, 1)}"></td>
+        <td style="font-size:13px" th:text="${f.reviewReasons}"></td>
+        <td><a th:href="@{/admin/findings/{id}(id=${f.id})}">Compare →</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Closest student-to-student pairs</h2>
+  <div class="card">
+    <p style="margin-top:0;color:#6b6b6b" th:if="${#lists.isEmpty(topPeerPairs)}">
+      No student-to-student comparisons in this run.
+    </p>
+    <table th:unless="${#lists.isEmpty(topPeerPairs)}">
+      <thead><tr><th>Pair</th><th>Average</th><th>Maximal</th></tr></thead>
+      <tbody>
+      <tr th:each="p : ${topPeerPairs}">
+        <td style="font-family:ui-monospace,monospace;font-size:12.5px"
+            th:text="${p.leftName} + '  ↔  ' + ${p.rightName}"></td>
+        <td class="num" th:text="${#numbers.formatDecimal(p.similarity * 100, 1, 0)} + '%'"></td>
+        <td class="num" th:text="${#numbers.formatDecimal(p.maximalSimilarity * 100, 1, 0)} + '%'"></td>
+      </tr>
+      </tbody>
+    </table>
+    <div class="hint">
+      Folder names, not student names, because this is JPlag's own output. The
+      review table above resolves them.
+    </div>
+  </div>
+
+  <h2 th:text="'Everything else (' + ${#lists.size(clear)} + ')'"></h2>
+  <div class="card">
+    <table>
+      <thead>
+      <tr><th>Student</th><th>Group</th><th>vs reference</th><th>vs peers</th><th></th></tr>
+      </thead>
+      <tbody>
+      <tr th:each="f : ${clear}">
+        <td th:text="${f.submission.studentName}"></td>
+        <td th:text="${f.submission.studentGroup.label}"></td>
+        <td class="num" th:text="${f.topReferencePercent} + '%'"></td>
+        <td class="num" th:text="${f.topPeerPercent} + '%'"></td>
+        <td><a th:href="@{/admin/findings/{id}(id=${f.id})}">Compare →</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="note">
+    Thresholds in use: review at z ≥
+    <span th:text="${thresholds.outlierZThreshold}"></span>
+    or absolute similarity ≥
+    <span th:text="${#numbers.formatDecimal(thresholds.absoluteReviewThreshold * 100, 1, 0)} + '%'"></span>.
+    Adjustable in application.yml.
+  </footer>
+</div>
+</body>
+</html>

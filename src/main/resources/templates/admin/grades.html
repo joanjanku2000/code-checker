@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="'Grading — ' + ${lab.displayName}">Grading</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    <strong><a th:href="@{/admin}" style="color:inherit">CodeTriage</a></strong>
+    <span>
+      <a th:href="@{/admin/labs/{n}/{g}(n=${lab.number},g=${lab.studentGroup.name()})}"
+         th:text="${lab.displayName}"></a>
+      &nbsp;·&nbsp;<a th:href="@{/admin}">All labs</a>
+    </span>
+  </div>
+</header>
+
+<div class="wrap wide">
+  <h1 th:text="'Grading — ' + ${lab.displayName}"></h1>
+  <p class="lede" th:text="${lab.title}"></p>
+
+  <div class="banner ok" th:if="${message}" th:text="${message}"></div>
+  <div class="banner bad" th:if="${error}" th:text="${error}"></div>
+
+  <div class="notice">
+    <strong>Visible to you only</strong>
+    Students see a submission receipt and nothing else — no grade, no suggestion,
+    no similarity figure. The <em>suggested</em> label is an assessment against the
+    assignment text, offered as a starting point; the verdict is whatever you set.
+    The similarity label is context sitting beside the grade, not part of it.
+  </div>
+
+  <!-- Defaults to the undecided pile so the page empties as you work through it.
+       Decided submissions are not gone, just on another tab. -->
+  <div class="filters">
+    <a th:href="@{/admin/labs/{n}/{g}/grades(n=${lab.number},g=${lab.studentGroup.name()},show='undecided')}"
+       th:classappend="${show == 'undecided'} ? 'on' : ''"
+       th:text="'Still to decide (' + ${undecidedCount} + ')'"></a>
+    <a th:href="@{/admin/labs/{n}/{g}/grades(n=${lab.number},g=${lab.studentGroup.name()},show='pass')}"
+       th:classappend="${show == 'pass'} ? 'on' : ''"
+       th:text="'Pass (' + ${passCount} + ')'"></a>
+    <a th:href="@{/admin/labs/{n}/{g}/grades(n=${lab.number},g=${lab.studentGroup.name()},show='notpass')}"
+       th:classappend="${show == 'notpass'} ? 'on' : ''"
+       th:text="'Not pass (' + ${notPassCount} + ')'"></a>
+    <a th:href="@{/admin/labs/{n}/{g}/grades(n=${lab.number},g=${lab.studentGroup.name()},show='all')}"
+       th:classappend="${show == 'all'} ? 'on' : ''"
+       th:text="'All (' + ${totalCount} + ')'"></a>
+  </div>
+
+  <div class="actions" style="margin-bottom:22px">
+    <a class="btn secondary"
+       th:href="@{/admin/labs/{n}/{g}/grades.csv(n=${lab.number},g=${lab.studentGroup.name()})}">
+      Download grades CSV
+    </a>
+  </div>
+
+  <div th:if="${gradingJob != null and !gradingJob.finished}" class="card">
+    <div class="progress"><div th:style="'width:' + ${gradingJob.percent} + '%'"></div></div>
+    <div class="hint" th:text="${gradingJob.message} + ' (' + ${gradingJob.done} + '/' + ${gradingJob.total} + ')'"></div>
+  </div>
+
+  <p style="color:#6b6b6b" th:if="${#lists.isEmpty(rows)}">
+    <span th:if="${show == 'undecided' and totalCount > 0}">
+      Nothing left to decide. Everything in this lab has a verdict.
+    </span>
+    <span th:if="${totalCount == 0}">No submissions for this lab yet.</span>
+    <span th:if="${show != 'undecided' and totalCount > 0}">Nothing in this view.</span>
+  </p>
+
+  <div class="card" th:each="row : ${rows}" style="padding:18px 20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap">
+      <div>
+        <strong style="font-size:16px" th:text="${row.submission.studentName}"></strong>
+        <div class="hint" style="margin-top:3px">
+          <span th:text="${row.submission.studentGroup.label}"></span> ·
+          <span th:text="${#temporals.format(row.submission.submittedAt, 'dd/MM HH:mm')}"></span>
+          <span th:if="${row.submission.late}" class="pill warn">late</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span th:unless="${row.checked}" class="pill off">not checked</span>
+        <span th:if="${row.checked and row.grade.compileOk == true}" class="pill">compiles</span>
+        <span th:if="${row.checked and row.grade.compileOk == false}" class="pill flag"
+              th:text="'does not compile (' + ${row.grade.compileErrorCount} + ')'"></span>
+
+        <span th:if="${row.grade != null and row.grade.suggestedVerdict != null}"
+              class="pill warn"
+              th:text="'suggested: ' + ${row.grade.suggestedVerdict.label}"></span>
+
+        <span th:if="${row.flaggedForSimilarity}" class="pill flag"
+              th:text="'similarity flag ' + ${row.finding.topReferencePercent} + '%'"></span>
+
+        <span th:if="${row.grade != null and row.grade.verdict.name() == 'PASS'}"
+              class="pill" style="font-size:13px;padding:4px 12px">PASS</span>
+        <span th:if="${row.grade != null and row.grade.verdict.name() == 'NOT_PASS'}"
+              class="pill flag" style="font-size:13px;padding:4px 12px">NOT PASS</span>
+        <span th:unless="${row.decided}" class="pill off"
+              style="font-size:13px;padding:4px 12px">undecided</span>
+      </div>
+    </div>
+
+    <details style="margin-top:14px" th:if="${row.grade != null}">
+      <summary style="cursor:pointer;font-size:14px;color:var(--accent)">
+        Assessment and compiler output
+      </summary>
+
+      <div style="margin-top:14px">
+        <div th:if="${row.grade.assessmentError != null}" class="banner bad"
+             th:text="'Assessment did not run: ' + ${row.grade.assessmentError}"></div>
+
+        <div th:if="${!#lists.isEmpty(row.grade.criteria)}">
+          <h3 style="margin-top:0">Against the assignment</h3>
+          <table>
+            <tbody>
+            <tr th:each="c : ${row.grade.criteria}">
+              <td style="width:28px">
+                <span th:if="${c.met}" style="color:var(--accent);font-weight:700">&#10003;</span>
+                <span th:unless="${c.met}" style="color:var(--flag);font-weight:700">&#10007;</span>
+              </td>
+              <td><strong th:text="${c.requirement}"></strong>
+                <div class="hint" style="margin-top:2px" th:text="${c.note}"></div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+          <p style="font-size:14px;margin-top:14px" th:if="${row.grade.suggestionReasoning != null}">
+            <em th:text="${row.grade.suggestionReasoning}"></em>
+          </p>
+        </div>
+
+        <div th:if="${row.grade.compileOutput != null}">
+          <h3>Compiler</h3>
+          <pre class="code" style="max-height:220px" th:text="${row.grade.compileOutput}"></pre>
+        </div>
+      </div>
+    </details>
+
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:16px">
+      <!-- Run the checks for just this student. Synchronous, so the button
+           sits still for a few seconds while the rubric call runs. -->
+      <form th:action="@{/admin/submissions/{id}/check(id=${row.submission.id})}" method="post">
+        <input type="hidden" name="back"
+               th:value="'/admin/labs/' + ${lab.number} + '/' + ${lab.studentGroup.name()}
+                         + '/grades?show=' + ${show}">
+        <button type="submit" class="secondary"
+                th:text="${row.checked} ? 'Re-run checks' : 'Run checks'"></button>
+      </form>
+
+      <form th:action="@{/admin/submissions/{id}/check(id=${row.submission.id})}" method="post"
+            th:if="${llmConfigured}">
+        <input type="hidden" name="assess" value="false">
+        <input type="hidden" name="back"
+               th:value="'/admin/labs/' + ${lab.number} + '/' + ${lab.studentGroup.name()}
+                         + '/grades?show=' + ${show}">
+        <button type="submit" class="secondary" title="Skip the rubric assessment">
+          Compile only
+        </button>
+      </form>
+
+      <a class="btn secondary" th:if="${row.finding != null}"
+         th:href="@{/admin/findings/{id}(id=${row.finding.id})}">See the code</a>
+      <a class="btn secondary"
+         th:href="@{/admin/submissions/{id}/archive(id=${row.submission.id})}">Download zip</a>
+    </div>
+
+    <form th:action="@{/admin/grades/{id}/decide(id=${row.submission.id})}" method="post"
+          style="margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <input type="hidden" name="show" th:value="${show}">
+      <div style="flex:1;min-width:240px">
+        <label th:for="'note-' + ${row.submission.id}" style="margin-top:0">Note (optional)</label>
+        <input type="text" th:id="'note-' + ${row.submission.id}" name="note"
+               th:value="${row.grade != null} ? ${row.grade.lecturerNote} : ''"
+               placeholder="Why, in a line — useful if the student asks later">
+      </div>
+      <button type="submit" name="verdict" value="PASS">Pass</button>
+      <button type="submit" name="verdict" value="NOT_PASS" class="danger">Not pass</button>
+      <button type="submit" name="verdict" value="UNGRADED" class="secondary">Clear</button>
+    </form>
+
+    <div class="hint" th:if="${row.grade != null and row.grade.overridden}" style="margin-top:8px">
+      You decided the opposite of the suggestion. Your verdict stands.
+    </div>
+  </div>
+
+  <footer class="note">
+    A compile failure is a fact. The rubric assessment is an opinion from a model
+    reading your assignment text, and it can be wrong about an ambiguous
+    requirement. Open the code when it matters.
+  </footer>
+</div>
+</body>
+</html>

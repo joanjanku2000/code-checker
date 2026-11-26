@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="sq" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dorëzimi u regjistrua</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+
+<header class="site">
+  <div class="inner">
+    <strong>Dorëzimi i detyrave të laboratorit</strong>
+  </div>
+</header>
+
+<div class="wrap">
+  <h1>Dorëzimi u regjistrua</h1>
+  <p class="lede">Ruaje këtë faqe ose bëj një pamje ekrani si dëshmi të dorëzimit.</p>
+
+  <div class="card">
+    <table>
+      <tr><th>Studenti</th><td th:text="${submission.studentName}"></td></tr>
+      <tr><th>Grupi</th><td th:text="${submission.studentGroup.label}"></td></tr>
+      <tr><th>Laboratori</th><td th:text="${submission.labNumber}"></td></tr>
+      <tr><th>Skedari</th><td th:text="${submission.originalFilename}"></td></tr>
+      <tr><th>Skedarë .java</th><td th:text="${submission.sourceFileCount}"></td></tr>
+      <tr><th>Koha</th><td th:text="${#temporals.format(submission.submittedAt, 'dd/MM/yyyy HH:mm')}"></td></tr>
+      <tr><th>Kodi i dorëzimit</th><td th:text="'#' + ${submission.id}"></td></tr>
+      <tr th:if="${submission.late}">
+        <th>Statusi</th>
+        <td><span class="pill warn">Pas afatit</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="actions">
+    <a class="btn secondary" th:href="@{/}">Dorëzo një tjetër</a>
+  </div>
+</div>
+</body>
+</html>
